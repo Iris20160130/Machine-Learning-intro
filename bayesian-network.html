@@ -1,0 +1,43 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bayesian Network Inference</title><style>
+*{box-sizing:border-box}body{margin:0;background:#edf4f6;color:#172e45;font:18px/1.55 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:clamp(18px,5vw,46px);background:#fff;min-height:100vh}header{color:#006c78;font-weight:bold;letter-spacing:.08em}h1{line-height:1.15}h2{font-size:1.2rem;margin:.7em 0 .2em}p{margin:.5em 0}svg{width:100%;display:block;margin:16px auto;color:#172e45}svg text{font:17px system-ui,sans-serif;fill:currentColor}.controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0}button{font:inherit;padding:7px 13px;border:1px solid #95a9b3;border-radius:6px;background:#fff;color:inherit;cursor:pointer}button:disabled{opacity:.45;cursor:default}#next{background:#006c78;color:white}#status{min-height:5.2em;border-left:4px solid #007b86;padding-left:12px}aside{margin-top:22px;border-top:1px solid #cedde2;padding-top:12px}.network{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;margin:20px auto}.node{border:2px solid #007b86;border-radius:8px;padding:8px 14px;font-weight:bold}.observed{background:#fff2da;border-color:#ae6212}table{border-collapse:collapse;width:100%;margin-bottom:16px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #dce6eb}.focus{background:#e0f2f2}.excluded{color:#626d78;background:#f3f6f7}summary{cursor:pointer}
+</style><main><header>INTRODUCTION TO MACHINE LEARNING</header><h1>Bayesian Network Inference</h1><p>If you see wet ground, how likely is it that it rained?</p>
+<div class="network"><div class="node" id="rain">Rain</div><span aria-label="points to">→</span><div class="node" id="wet">Wet ground</div></div>
+<table><thead><tr><th>Rain</th><th>Ground</th><th>Count</th></tr></thead><tbody id="counts"></tbody></table>
+<aside><details><summary>Class question</summary><p>Why do we divide by 25 once we know the ground is wet?</p><details><summary>Show answer</summary><p>Only the 25 wet-ground records match the evidence. It rained in 17 of those records, so the updated probability is 17 ÷ 25 = 68%.</p></details></details></aside>
+
+<div id="status" aria-live="polite"><h2 id="step"></h2><p id="detail"></p></div>
+<div class="controls"><button id="prev">Previous</button><button id="next">Next</button><button id="play">Play</button><span id="progress"></span></div>
+
+<script>
+const rows=[['No','Dry',12],['No','Wet',8],['Yes','Dry',3],['Yes','Wet',17]];
+const steps=[
+ ['Start with 40 observations','Each row shows one combination of rain and ground conditions.'],
+ ['Find the prior probability','It rained in 3 + 17 = 20 records. Before seeing the ground, P(Rain) = 20 / 40 = 50%.'],
+ ['Observe wet ground','Keep the 8 + 17 = 25 wet-ground records. These are the cases that match the evidence.'],
+ ['Find the posterior probability','Of those 25 records, 17 had rain. P(Rain given Wet ground) = 17 / 25 = 68%.'],
+ ['Compare prior and posterior','Observing wet ground raises the estimated probability of rain from 50% to 68%.']
+];
+const total=steps.length;
+function draw(i){
+ byId('counts').innerHTML=rows.map(([rain,ground,n])=>{
+  const cls=i===1&&rain==='Yes'?'focus':i>=2&&ground==='Dry'?'excluded':i>=2&&ground==='Wet'?'focus':'';
+  return '<tr class="'+cls+'"><td>'+rain+'</td><td>'+ground+'</td><td>'+n+'</td></tr>';
+ }).join('');
+ byId('wet').classList.toggle('observed',i>=2);
+ byId('wet').textContent=i>=2?'Wet ground observed':'Wet ground';
+ byId('rain').textContent=i>=3?'Rain: 68%':i>=1?'Rain: 50%':'Rain';
+ byId('step').textContent=steps[i][0];byId('detail').textContent=steps[i][1];
+}
+</script>
+
+<script>
+let frame=0,timer=null;
+const byId=id=>document.getElementById(id),prev=byId('prev'),next=byId('next'),play=byId('play');
+function render(){draw(frame);prev.disabled=frame===0;next.disabled=frame===total-1;byId('progress').textContent=(frame+1)+' / '+total;play.textContent=timer?'Pause':frame===total-1?'Replay':'Play';}
+function pause(){clearInterval(timer);timer=null;}
+prev.onclick=()=>{pause();if(frame>0)frame--;render();};
+next.onclick=()=>{pause();if(frame<total-1)frame++;render();};
+play.onclick=()=>{if(timer){pause();render();return;}if(frame===total-1)frame=0;timer=setInterval(()=>{frame++;if(frame===total-1)pause();render();},2400);render();};
+render();
+</script></main></html>

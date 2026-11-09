@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hierarchical Clustering</title><style>
+*{box-sizing:border-box}body{margin:0;background:#edf4f6;color:#172e45;font:18px/1.55 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:clamp(18px,5vw,46px);background:#fff;min-height:100vh}header{color:#006c78;font-weight:bold;letter-spacing:.08em}h1{line-height:1.15}h2{font-size:1.2rem;margin:.7em 0 .2em}p{margin:.5em 0}svg{width:100%;display:block;margin:16px auto;color:#172e45}svg text{font:17px system-ui,sans-serif;fill:currentColor}.controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0}button{font:inherit;padding:7px 13px;border:1px solid #95a9b3;border-radius:6px;background:#fff;color:inherit;cursor:pointer}button:disabled{opacity:.45;cursor:default}#next{background:#006c78;color:white}#status{min-height:5.2em;border-left:4px solid #007b86;padding-left:12px}aside{margin-top:22px;border-top:1px solid #cedde2;padding-top:12px}.network{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;margin:20px auto}.node{border:2px solid #007b86;border-radius:8px;padding:8px 14px;font-weight:bold}.observed{background:#fff2da;border-color:#ae6212}table{border-collapse:collapse;width:100%;margin-bottom:16px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #dce6eb}.focus{background:#e0f2f2}.excluded{color:#626d78;background:#f3f6f7}summary{cursor:pointer}
+</style><main><header>INTRODUCTION TO MACHINE LEARNING</header><h1>Hierarchical Clustering</h1><p>Watch six points merge into a tree. Then cut the same tree at different heights.</p>
+<svg id="tree" viewBox="0 0 520 280" role="img" aria-label="Dendrogram of points A through F"></svg>
+<aside><details><summary>Class question</summary><p>Which pair merges first? At a cut height of 4, how many vertical branches cross the cut?</p><details><summary>Show answer</summary><p>A and B merge first at height 1. The cut crosses three branches, giving {A, B}, {C, D} and {E, F}.</p></details></details></aside>
+
+<div id="status" aria-live="polite"><h2 id="step"></h2><p id="detail"></p></div>
+<div class="controls"><button id="prev">Previous</button><button id="next">Next</button><button id="play">Play</button><span id="progress"></span></div>
+
+<script>
+const leaves=['A','B','C','D','E','F'];
+const merges=[[0,1,1],[2,3,2],[4,5,3],[6,7,6],[9,8,10]];
+const cuts=[2.5,4,7];
+const total=1+merges.length+cuts.length;
+function draw(i){
+ const cut=i>merges.length?cuts[i-merges.length-1]:null;
+ const count=Math.min(i,merges.length);
+ const nodes=leaves.map((name,k)=>({x:76+k*78,h:0,ids:[name]}));
+ const y=h=>238-h*19;
+ const live=new Set(nodes);
+ let svg='<path d="M44 238V40" stroke="#a1b0bd" fill="none"/><text x="12" y="25">Merge height</text>';
+ for(const h of [0,2,4,6,8,10])svg+='<text x="32" y="'+(y(h)+5)+'" text-anchor="end">'+h+'</text>';
+ for(let k=0;k<count;k++){
+  const [a,b,h]=merges[k],l=nodes[a],r=nodes[b],n={x:(l.x+r.x)/2,h,ids:[...l.ids,...r.ids]};
+  nodes.push(n);
+  if(cut===null||h<cut){live.delete(l);live.delete(r);live.add(n);}
+  const colour=cut!==null&&h>cut?'#a1b0bd':k===i-1&&cut===null?'#007b86':'#28465d';
+  svg+='<path d="M'+l.x+' '+y(l.h)+'V'+y(h)+'H'+r.x+'V'+y(r.h)+'" fill="none" stroke="'+colour+'" stroke-width="3"/>';
+ }
+ if(cut!==null)svg+='<path d="M46 '+y(cut)+'H476" fill="none" stroke="#bc5a19" stroke-width="2" stroke-dasharray="7 5"/><text x="480" y="'+(y(cut)+5)+'" fill="#bc5a19">'+cut+'</text>';
+ leaves.forEach((name,k)=>svg+='<text x="'+nodes[k].x+'" y="264" text-anchor="middle">'+name+'</text>');
+ byId('tree').innerHTML=svg;
+ const groups=[...live].sort((a,b)=>a.ids[0].localeCompare(b.ids[0])).map(n=>'{'+n.ids.join(', ')+'}');
+ byId('step').textContent=cut!==null?'Cut at height '+cut:i===0?'Start with six separate points':'Merge '+i+' at height '+merges[i-1][2];
+ byId('detail').textContent=groups.length+' cluster'+(groups.length===1?'':'s')+' · '+groups.join('  ');
+}
+</script>
+
+<script>
+let frame=0,timer=null;
+const byId=id=>document.getElementById(id),prev=byId('prev'),next=byId('next'),play=byId('play');
+function render(){draw(frame);prev.disabled=frame===0;next.disabled=frame===total-1;byId('progress').textContent=(frame+1)+' / '+total;play.textContent=timer?'Pause':frame===total-1?'Replay':'Play';}
+function pause(){clearInterval(timer);timer=null;}
+prev.onclick=()=>{pause();if(frame>0)frame--;render();};
+next.onclick=()=>{pause();if(frame<total-1)frame++;render();};
+play.onclick=()=>{if(timer){pause();render();return;}if(frame===total-1)frame=0;timer=setInterval(()=>{frame++;if(frame===total-1)pause();render();},2400);render();};
+render();
+</script></main></html>
