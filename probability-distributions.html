@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Probability Distributions Lab</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#142d43;background:#eef3f5;--teal:#007b82;--red:#ad1727}*{box-sizing:border-box}body{margin:0}header{background:var(--red);color:white;padding:14px max(22px,calc((100% - 1060px)/2));font-weight:700}main{max-width:1100px;margin:auto;padding:24px 20px 40px}h1{margin:0;font-size:clamp(1.8rem,4vw,2.8rem)}p{line-height:1.5}nav,.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}button{font:inherit;font-weight:650;padding:9px 14px;border:1px solid #b5c7ce;border-radius:8px;background:white;color:inherit;cursor:pointer}button[aria-pressed=true],.primary{background:var(--teal);color:white;border-color:var(--teal)}button:focus-visible,input:focus-visible{outline:3px solid #ad1727;outline-offset:3px}button:disabled{opacity:.45;cursor:default}section{margin-top:15px;padding:clamp(12px,3vw,26px);background:white;border:1px solid #cddbe0;border-radius:14px}h2{margin:0}.graph{display:block;width:100%;max-height:420px;margin:8px 0}.answer{border-left:4px solid var(--teal);background:#e7f4f3;padding:10px 14px;margin-bottom:0}.controls label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}input{accent-color:var(--teal)}[hidden]{display:none!important}summary{cursor:pointer;font-weight:650}details{margin-top:14px}
+</style>
+<header>CSCU9M5 · Introduction to Machine Learning</header>
+<main>
+<h1>Probability Distributions Lab</h1>
+<p>Explore probability for a single outcome, probability over an interval, and how to estimate a density from data.</p>
+<nav aria-label="Lessons">
+<button type="button" data-tab="pmf" aria-pressed="true">1 · Discrete probability</button>
+<button type="button" data-tab="pdf" aria-pressed="false">2 · Continuous probability</button>
+<button type="button" data-tab="kde" aria-pressed="false">3 · Estimate a density</button>
+</nav>
+<section id="pmf">
+<h2>A fair die has six possible outcomes</h2>
+<p>The probability mass function (PMF) gives the probability of each exact outcome. Select a face.</p>
+<div class="controls" id="faces" aria-label="Die faces"></div>
+<svg class="graph" id="mass" viewBox="0 0 680 290" role="img" aria-label="Equal probability bars for the six die faces"></svg>
+<p class="answer" id="massResult" aria-live="polite"></p>
+<details><summary>Check your understanding</summary><p>What is the probability of rolling an even number? Add the bars for 2, 4 and 6. The answer is 3/6 = 50%.</p></details>
+</section>
+<section id="pdf" hidden>
+<h2>For a continuous variable, probability is area</h2>
+<p>Use the sliders to shade an interval under a standard normal probability density function (PDF).</p>
+<div class="controls"><label for="left">Lower endpoint <input id="left" type="range" min="-3.5" max="3.5" step=".1" value="-1"></label><label for="right">Upper endpoint <input id="right" type="range" min="-3.5" max="3.5" step=".1" value="1"></label><button id="widen">Animate a wider interval</button></div>
+<svg class="graph" id="density" viewBox="0 0 680 290" role="img" aria-label="Standard normal density with the selected interval shaded"></svg>
+<p class="answer" id="densityResult" aria-live="polite"></p>
+<details><summary>Check your understanding</summary><p>Bring the two endpoints together at zero. The curve is high there, but the shaded area is zero. Under this continuous model, the probability of exactly zero is zero.</p></details>
+</section>
+<section id="kde" hidden>
+<h2>How do we estimate a density from observations?</h2>
+<p>Follow the three steps, then change the bandwidth while keeping the observations fixed.</p>
+<div class="controls"><button id="prev">Back</button><button id="next" class="primary">Next step</button><button id="play">Play steps</button><label for="bw">Bandwidth h <input id="bw" type="range" min=".15" max="1.4" step=".05" value=".4"></label></div>
+<svg class="graph" id="estimate" viewBox="0 0 680 290" role="img" aria-label="Observations, Gaussian kernel contributions, and their sum"></svg>
+<p class="answer" id="kdeResult" aria-live="polite"></p>
+<details><summary>Check your understanding</summary><p>Try h = 0.15 and then h = 1.40. What happens to the gap between the groups? A larger bandwidth spreads each contribution farther and can make the gap harder to see.</p></details>
+</section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const teal='#007b82', orange='#b5521c', ink='#142d43';
+const normal=z=>Math.exp(-z*z/2)/Math.sqrt(2*Math.PI);
+const y0=242;
+function axes(xLabel,yLabel,ticks,yTicks,x,y){
+  return '<path d="M72 20 V242 H650" fill="none" stroke="#8196a4"/>'+
+    ticks.map(v=>'<text x="'+x(v)+'" y="263" text-anchor="middle">'+v+'</text>').join('')+
+    yTicks.map(v=>'<text x="64" y="'+(y(v)+4)+'" text-anchor="end">'+v+'</text>').join('')+
+    '<text x="361" y="286" text-anchor="middle">'+xLabel+'</text><text transform="translate(17 130) rotate(-90)" text-anchor="middle">'+yLabel+'</text>';
+}
+function points(a,b,f,x,y){
+  return Array.from({length:181},(_,i)=>{const v=a+(b-a)*i/180;return x(v).toFixed(2)+' '+y(f(v)).toFixed(2)}).join(' L');
+}
+const faces=Array.from({length:6},(_,i)=>i+1);
+let selected=3;
+for(const f of faces){
+  const b=document.createElement('button');b.textContent=f;b.setAttribute('aria-label','Select face '+f);
+  b.onclick=()=>{selected=f;drawMass()};$('faces').append(b);
+}
+function drawMass(){
+  const x=v=>105+(v-1)*102,y=v=>y0-v*980;
+  $('mass').innerHTML=axes('Die face','Probability',faces,[0,.05,.1,.15,.2],x,y)+faces.map(v=>'<rect x="'+(x(v)-26)+'" y="'+y(1/6)+'" width="52" height="'+(y0-y(1/6))+'" fill="'+(v===selected?teal:'#9ebac6')+'" rx="3"/>').join('');
+  $('massResult').textContent='P(X = '+selected+') = 1/6 ≈ 16.7%. The selected bar represents one exact outcome.';
+  [...$('faces').children].forEach((b,i)=>b.setAttribute('aria-pressed',String(i+1===selected)));
+}
+const x=v=>72+(v+4)*578/8;
+const ticks=[-4,-3,-2,-1,0,1,2,3,4];
+function area(a,b){
+  const dx=(b-a)/200;
+  return dx*Array.from({length:200},(_,i)=>normal(a+(i+.5)*dx)).reduce((sum,v)=>sum+v,0);
+}
+function drawPdf(report=true){
+  const a=+$('left').value,b=+$('right').value,y=v=>y0-v*480;
+  $('density').innerHTML=axes('Value of X','Density',ticks,[0,.1,.2,.3,.4],x,y)+
+    '<path d="M'+x(a)+' '+y0+' L'+points(a,b,normal,x,y)+' L'+x(b)+' '+y0+' Z" fill="#9edbd8"/>'+
+    '<path d="M'+points(-4,4,normal,x,y)+'" stroke="'+teal+'" stroke-width="3" fill="none"/>';
+  if(report)$('densityResult').textContent='P('+a.toFixed(1)+' ≤ X ≤ '+b.toFixed(1)+') ≈ '+(100*area(a,b)).toFixed(2)+'%. Read probability from the shaded area.';
+}
+let pdfAnimation;
+for(const id of ['left','right']){
+  $(id).oninput=()=>{
+    cancelAnimationFrame(pdfAnimation);
+    if(+$('left').value>+$('right').value){const other=id==='left'?'right':'left';$(other).value=$(id).value;}
+    drawPdf();
+  };
+}
+$('widen').onclick=()=>{
+  cancelAnimationFrame(pdfAnimation);
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){$('left').value=-2;$('right').value=2;drawPdf();return;}
+  const start=performance.now();
+  function tick(now){
+    const t=Math.min((now-start)/1400,1),limit=(.2+1.8*t).toFixed(1);
+    $('left').value=-limit;$('right').value=limit;drawPdf(t===1);
+    if(t<1)pdfAnimation=requestAnimationFrame(tick);
+  }
+  pdfAnimation=requestAnimationFrame(tick);
+};
+const observations=[-2.2,-1.8,-1.6,-1.3,1.1,1.4,1.8,2.1];
+let step=0, timer;
+function drawKde(){
+  const h=+$('bw').value,y=v=>y0-v*390;
+  const kernels=observations.map(mu=>v=>normal((v-mu)/h)/(observations.length*h));
+  const total=v=>kernels.reduce((sum,k)=>sum+k(v),0);
+  const path=(fn,color,width,dash='')=>'<path d="M'+points(-4,4,fn,x,y)+'" stroke="'+color+'" stroke-width="'+width+'" stroke-dasharray="'+dash+'" fill="none"/>';
+  $('estimate').innerHTML=axes('Observed value','Density',ticks,[0,.1,.2,.3,.4,.5],x,y)+
+    (step>=1?kernels.map(k=>path(k,orange,1.6,'5 4')).join(''):'')+
+    (step>=2?path(total,teal,3.3):'')+
+    observations.map(v=>'<circle cx="'+x(v)+'" cy="'+y0+'" r="4" fill="'+ink+'"/>').join('');
+  const captions=['Start with eight observations. Each dot marks an observed value.','Place a Gaussian contribution at every observation. Each dashed curve has area 1/8.','Add the dashed contributions. The solid curve is the density estimate and has total area 1.'];
+  $('kdeResult').textContent='Step '+(step+1)+' of 3 · '+captions[step]+' Bandwidth h = '+h.toFixed(2)+'.';
+  $('prev').disabled=step===0;$('next').disabled=step===2;
+}
+function stopKde(){clearInterval(timer);timer=undefined;$('play').textContent='Play steps';}
+$('prev').onclick=()=>{stopKde();step--;drawKde();};
+$('next').onclick=()=>{stopKde();step++;drawKde();};
+$('play').onclick=()=>{
+  if(timer!==undefined){stopKde();return;}
+  step=0;drawKde();$('play').textContent='Pause';
+  timer=setInterval(()=>{step++;drawKde();if(step===2)stopKde();},1600);
+};
+$('bw').oninput=()=>{stopKde();step=2;drawKde();};
+for(const b of document.querySelectorAll('[data-tab]')){
+  b.onclick=()=>{
+    stopKde();
+    for(const tab of document.querySelectorAll('[data-tab]')){
+      const active=tab===b;tab.setAttribute('aria-pressed',String(active));$(tab.dataset.tab).hidden=!active;
+    }
+  };
+}
+drawMass();drawPdf();drawKde();
+</script>
+</html>
