@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DBSCAN Cluster Expansion</title>
+<style>
+:root{--background:#fff;--foreground:#152d43;--muted-foreground:#778694;--viz-series-1:#007b92;--viz-series-2:#c45c24}
+*{box-sizing:border-box}body{margin:0;background:#eef3f6;color:var(--foreground);font:18px/1.5 system-ui,sans-serif}
+main{max-width:950px;margin:auto;padding:clamp(16px,4vw,44px);background:white}
+h3{font-size:clamp(26px,5vw,42px);margin:0 0 8px}.text-small{font-size:15px}.legend{margin-top:10px}svg{display:block}
+#db-state{font-weight:650}#db-pending{min-height:2em}.viz-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+button{font:inherit;padding:8px 14px;border:1px solid #a8b5bf;border-radius:6px;background:white;color:inherit;cursor:pointer}
+button.btn-primary{background:#006679;color:white;border-color:#006679}button:disabled{opacity:.45;cursor:default}
+aside{margin-top:22px;padding-top:14px;border-top:1px solid #ccd7df}p{margin:0 0 8px}
+</style>
+</head>
+<body><main>
+<section id="dbscan-expansion">
+  <h3>DBSCAN Cluster Expansion</h3>
+  <p>Use Next to inspect one point at a time, or Play to watch the first cluster grow.</p>
+  <div class="text-small">ε = 0.61 · minPts = 4 · Count the point itself</div>
+  <div class="text-small legend">Blue dot = cluster member · Blue outline = confirmed border point · Grey dot = outside the current cluster · Orange ring = neighbourhood being checked</div>
+  <svg width="100%" height="235" role="img" aria-label="Data points and the current epsilon neighbourhood"></svg>
+  <div aria-live="polite">
+    <div id="db-state"></div>
+    <div id="db-pending" class="text-small"></div>
+  </div>
+  <div class="viz-row" style="margin-top:12px">
+    <button type="button" class="btn" data-act="prev">Previous</button>
+    <button type="button" class="btn btn-primary" data-act="next">Next</button>
+    <button type="button" class="btn" data-act="play">Play</button>
+    <span class="text-small" id="db-progress"></span>
+  </div>
+</section>
+<script>
+(() => {
+ const root=document.getElementById('dbscan-expansion'), svg=root.querySelector('svg');
+ const points={S:[0,0],A:[-.4,0],B:[.4,0],C:[-.4,.4],D:[0,.4],E:[.4,.4],F:[-.4,-.4],G:[0,-.4],H:[.4,-.4],L:[-.95,0],R:[.95,0],X:[1.65,.65],Y:[1.85,-.55]};
+ const order=['S','A','L','B','R','C','D','E','F','G','H'];
+ const seen=new Set(), members=new Set(), borders=new Set(), frames=[];
+ for(const id of order){
+   const [x,y]=points[id];
+   const near=Object.keys(points).filter(k=>Math.hypot(points[k][0]-x,points[k][1]-y)<=.61);
+   const core=near.length>=4;
+   if(id!=='S'&&!members.has(id)) throw Error('Point not discovered');
+   seen.add(id);
+   const added=core?near.filter(k=>!members.has(k)):[];
+   if(core) near.forEach(k=>members.add(k)); else borders.add(id);
+   frames.push({id,near,core,added,members:[...members],borders:[...borders],pending:[...members].filter(k=>!seen.has(k))});
+ }
+ frames.unshift({id:null,members:[],borders:[],pending:[]});
+ frames.push({id:null,members:[...members],borders:[...borders],pending:[]});
+ let i=0,timer=null;
+ const prev=root.querySelector('[data-act=prev]'), next=root.querySelector('[data-act=next]'), play=root.querySelector('[data-act=play]');
+ function draw(){
+   const f=frames[i],w=svg.clientWidth||320,s=Math.min(105,(w-25)/3.6), px=x=>w/2+(x-.32)*s,py=y=>117-y*s;
+   svg.setAttribute('viewBox','0 0 '+w+' 235');
+   let marks='';
+   if(f.id){const [x,y]=points[f.id];marks+='<circle cx="'+px(x)+'" cy="'+py(y)+'" r="'+.61*s+'" fill="none" stroke="var(--viz-series-2)" stroke-width="2"/>';}
+   for(const [k,[x,y]] of Object.entries(points)){
+     const joined=f.members.includes(k),border=f.borders.includes(k);
+     marks+='<circle cx="'+px(x)+'" cy="'+py(y)+'" r="6" fill="'+(border?'var(--background)':joined?'var(--viz-series-1)':'var(--muted-foreground)')+'" stroke="'+(joined?'var(--viz-series-1)':'none')+'" stroke-width="2"/>';
+     marks+='<text x="'+px(x)+'" y="'+(py(y)-10)+'" text-anchor="middle" fill="var(--foreground)" font-size="12">'+k+'</text>';
+   }
+   svg.innerHTML=marks;
+   root.querySelector('#db-state').textContent=i===0?'Ready to check starting point S.':!f.id?'The list is empty. Cluster 1 is complete with 11 points.':f.id+' · '+f.near.length+' points in the neighbourhood · '+(f.core?'Core point · Added '+(f.added.join(', ')||'no new points'):'Border point · This point adds no neighbours')+' · Cluster size '+f.members.length;
+   root.querySelector('#db-pending').textContent='Still to check '+(f.pending.join(', ')||'—');
+   root.querySelector('#db-progress').textContent=i+' / '+(frames.length-1);
+   prev.disabled=i===0;next.disabled=i===frames.length-1;
+   if(!timer) play.textContent=i===frames.length-1?'Replay':'Play';
+ }
+ function stop(){clearInterval(timer);timer=null;play.textContent=i===frames.length-1?'Replay':'Play';}
+ prev.onclick=()=>{stop();i--;draw();};
+ next.onclick=()=>{stop();i++;draw();};
+ play.onclick=()=>{if(timer){stop();return;}if(i===frames.length-1)i=0;draw();play.textContent='Pause';timer=setInterval(()=>{i++;draw();if(i===frames.length-1)stop();},1500);};
+ new ResizeObserver(draw).observe(svg);draw();
+})();
+</script>
+
+<aside><p><strong>Class discussion</strong></p>
+<p>Pause when the orange ring reaches L. Which points are still on the list? What happens when we check B?</p>
+<p>This example follows the expansion of the first cluster. Once its list is empty, DBSCAN returns to the remaining unvisited points.</p></aside>
+</main></body></html>
