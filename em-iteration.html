@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What does EM learn?</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f6;color:#142d40;font:17px Arial,sans-serif}header{background:#a71625;color:white;padding:15px max(5vw,20px);font-weight:bold}main{max-width:1120px;margin:auto;padding:26px 22px}h1{margin:0;font-size:clamp(32px,6vw,57px);letter-spacing:-.035em}p{line-height:1.5}.bar{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}button{border:1px solid #adc1c3;background:white;color:#142d40;border-radius:7px;padding:11px 15px;font:inherit;cursor:pointer}button[aria-pressed=true]{background:#00696f;color:white;border-color:#00696f}button:focus-visible{outline:3px solid #ad4e16;outline-offset:2px}button:disabled{opacity:.45;cursor:default}.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}.card{min-width:0;background:white;border:1px solid #d9e4e4;border-radius:12px;padding:17px}h2{font-size:19px;margin:0 0 10px}canvas{width:100%;height:285px;display:block}.legend{font-size:14px}.legend span{display:inline-block;margin-right:12px}.current{color:#00696f}.start{color:#53697a}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{padding:10px 4px;text-align:left;border-bottom:1px solid #e1ebeb}td:nth-child(n+2),th:nth-child(n+2){text-align:right}.prob{font-weight:bold;color:#00696f}.caption{border-left:4px solid #00777e;background:#e8f3f1;padding:11px 15px;margin-top:16px}.muted{color:#53697a;font-size:14px}@media(max-width:720px){.grid{grid-template-columns:1fr}}
+</style>
+<header>CSCU9M5 · Introduction to Machine Learning</header><main>
+<h1>What does EM learn?</h1>
+<p>Fit two Gaussian components to six observations: <strong>1, 2, 3, 4, 5, 6</strong>. Start with a guess, update the parameters, then see what the model keeps.</p>
+<div class="bar" aria-label="Iteration controls"><button id="initial">Starting model</button><button id="first">After one update</button><button id="step">Next iteration</button><button id="final">Show converged model</button></div>
+<div class="grid"><section class="card"><h2>Overall mixture density</h2><div class="legend"><span class="start">– – Starting density</span><span class="current">━ Selected density</span></div>
+<canvas id="chart" role="img" aria-label="Starting and selected Gaussian mixture densities, with six observations marked along the horizontal axis"></canvas></section>
+<section class="card"><h2 id="stage" aria-live="polite"></h2>
+<table><thead><tr><th scope="col">Parameter</th><th scope="col">A</th><th scope="col">B</th></tr></thead><tbody id="parameters"></tbody></table>
+<p>Given that we observed <strong>x = 3</strong>, which component is more likely?</p><p class="prob" id="prob"></p>
+<p class="muted" id="likelihood"></p></section></div>
+<p class="caption" id="caption" aria-live="polite"></p>
+<p class="muted">Each iteration uses the current curves to estimate membership probabilities (E step), then updates the means, standard deviations and weights (M step). Convergence here means the change in log-likelihood is below 10⁻¹².</p>
+</main><script>
+const data=[1,2,3,4,5,6];
+const start=[[2,1,.4],[5,1,.6]];
+function contributions(model,x){
+  return model.map(([mean,sd,weight])=>weight*Math.exp(-.5*((x-mean)/sd)**2)/(sd*Math.sqrt(2*Math.PI)));
+}
+const sum=values=>values.reduce((a,b)=>a+b,0);
+const logLikelihood=model=>sum(data.map(x=>Math.log(sum(contributions(model,x)))));
+function update(model){
+  const membership=data.map(x=>{const values=contributions(model,x);return values.map(value=>value/sum(values));});
+  return model.map((_,k)=>{
+    const weights=membership.map(row=>row[k]);
+    const total=sum(weights);
+    const mean=sum(data.map((x,j)=>x*weights[j]))/total;
+    const sd=Math.sqrt(sum(data.map((x,j)=>weights[j]*(x-mean)**2))/total);
+    return [mean,sd,total/data.length];
+  });
+}
+const history=[start];
+for(let i=0;i<1000;i++){
+  const previous=history.at(-1), next=update(previous);
+  history.push(next);
+  if(Math.abs(logLikelihood(next)-logLikelihood(previous))<1e-12)break;
+}
+const last=history.length-1;
+const el=id=>document.getElementById(id);
+let index=0;
+function draw(){
+  const canvas=el('chart'),w=canvas.clientWidth,h=canvas.clientHeight,ratio=window.devicePixelRatio||1;
+  canvas.width=w*ratio;canvas.height=h*ratio;
+  const c=canvas.getContext('2d');c.scale(ratio,ratio);c.font='13px Arial';
+  const X=x=>48+(x+1)*(w-61)/10,Y=y=>h-51-y*(h-76)/.30;
+  for(const tick of [0,.1,.2,.3]){
+    c.beginPath();c.strokeStyle='#d9e5e6';c.moveTo(X(-1),Y(tick));c.lineTo(X(9),Y(tick));c.stroke();
+    c.fillStyle='#53697a';c.fillText(tick.toFixed(1),13,Y(tick)+4);
+  }
+  c.fillText('Density',8,14);
+  c.fillText('Observed value',w/2-35,h-6);
+  for(const x of data){
+    c.beginPath();c.strokeStyle='#142d40';c.moveTo(X(x),Y(0)-6);c.lineTo(X(x),Y(0)+6);c.stroke();
+    c.fillText(x,X(x)-4,Y(0)+23);
+  }
+  function curve(model,color,dash){
+    c.beginPath();c.strokeStyle=color;c.lineWidth=2.8;c.setLineDash(dash);
+    for(let j=0;j<=400;j++){
+      const x=-1+j/40,y=sum(contributions(model,x));
+      if(j===0)c.moveTo(X(x),Y(y));else c.lineTo(X(x),Y(y));
+    }
+    c.stroke();c.setLineDash([]);
+  }
+  curve(history[index],'#00777e',[]);
+  curve(start,'#53697a',[7,6]);
+}
+function show(i){
+  index=i;const model=history[i];
+  el('stage').textContent=i===0?'Starting parameters':i===last?'Converged parameters · iteration '+i:'Parameters after iteration '+i;
+  el('parameters').innerHTML=['Mean','Standard deviation','Mixture weight'].map((label,k)=>'<tr><th scope="row">'+label+'</th>'+model.map(v=>'<td>'+(k===2?(100*v[k]).toFixed(1)+'%':v[k].toFixed(3))+'</td>').join('')+'</tr>').join('');
+  const a=contributions(model,3), share=a[0]/sum(a);
+  el('prob').textContent='A: '+(100*share).toFixed(1)+'%  ·  B: '+(100*(1-share)).toFixed(1)+'%';
+  el('likelihood').textContent='Training log-likelihood: '+logLikelihood(model).toFixed(4);
+  el('caption').textContent=i===0?'These are our starting guesses. Compare them with the fitted parameters after EM.':i===last?'EM has fitted two centres, two spreads and two mixture weights. Together they define the final density and the membership probabilities.':'The update changes the component parameters. The new parameters give us an updated density and updated membership probabilities.';
+  for(const [id,on] of [['initial',i===0],['first',i===1],['final',i===last]]) el(id).setAttribute('aria-pressed',on);
+  el('step').disabled=i===last;
+  draw();
+}
+el('initial').onclick=()=>show(0);el('first').onclick=()=>show(1);el('step').onclick=()=>show(Math.min(last,index+1));el('final').onclick=()=>show(last);
+window.addEventListener('resize',draw);show(0);
+</script></html>
